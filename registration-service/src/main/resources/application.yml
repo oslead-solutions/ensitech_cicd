@@ -1,0 +1,11 @@
+resilience4j.circuitbreaker:
+  instances:
+    user-service:
+      slidingWindowSize: 10
+      failureRateThreshold: 50
+      waitDurationInOpenState: 5000
+
+    academic-service:
+      slidingWindowSize: 20
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10000

@@ -1,0 +1,28 @@
+//registrations endpoints
+GET http://localhost:8086/api/registrations
+
+###
+GET http://localhost:8086/api/registrations/1
+
+###
+POST http://localhost:8086/api/registrations
+Content-Type: application/json
+
+{
+    "registrationNumber":3,
+    "level": "L1"
+}
+
+###
+PUT http://localhost:8086/api/registrations/2
+Content-Type: application/json
+
+{
+    "registrationNumber":1,
+    "level": "L1"
+}
+
+###
+
+DELETE http://localhost:8086/api/registrations/1
+

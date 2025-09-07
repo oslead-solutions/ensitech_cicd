@@ -1,0 +1,40 @@
+  services:
+    app:
+      #Add the 'image' to provide a name to the image
+      image: service-registration
+      build:
+        context: ..
+        dockerfile: Dockerfile
+      ports:
+        - "8086:8086"
+      depends_on:
+       mysql:
+         condition: service_healthy
+      environment:
+          - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
+          - SPRING_DATASOURCE_USERNAME=${MYSQL_USER}
+          - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
+          - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+
+    mysql:
+      image: mysql:8.0
+      restart: always
+      environment:
+        MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+        MYSQL_DATABASE: ${MYSQL_DATABASE}
+        MYSQL_USER: ${MYSQL_USER}
+        MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      ports:
+        - "3305:3306"
+      volumes:
+        - mysql_academic_data:/var/lib/mysql
+        - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+      #A health check tells Docker Compose to wait until the service is genuinely ready
+      #before starting any other services that depend on it.
+      healthcheck:
+        test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER}", "-p${MYSQL_PASSWORD}" ]
+        timeout: 25s
+        retries: 10
+  volumes:
+    mysql_academic_data:

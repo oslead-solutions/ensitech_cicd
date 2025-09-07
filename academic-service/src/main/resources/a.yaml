@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: academic-service
+    profiles:
+      active: local
+    datasource:
+      url: jdbc:mysql://localhost:3307/${MYSQL_DATABASE}
+      username: ${MYSQL_USER}
+      password: ${MYSQL_PASSWORD}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+    jpa:
+      hibernate:
+        ddl-auto: update
+      show-sql: false
+      open-in-view: false
+      properties:
+        hibernate:
+
+server:
+  port: 8085
+
+
+

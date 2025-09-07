@@ -1,0 +1,28 @@
+# Configuration Spring
+spring:
+  config:
+    import-check:
+      enabled: false
+  cloud:
+    config:
+      enabled: false
+  # Configuration de la source de données (DataSource)
+  datasource:
+    url: jdbc:mysql://localhost:3307/${MYSQL_DATABASE}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  # Configuration de JPA (Java Persistence API) et Hibernate
+  jpa:
+    # Configuration spécifique à Hibernate, l'implémentation de JPA que nous utilisons
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    # pour MySQL, mais le spécifier est plus sûr.
+    database-platform: org.hibernate.dialect.MySQLDialect
+# Configuration spécifique au serveur
+server:
+  port: 8085 # Le port sur lequel l'application va tourner

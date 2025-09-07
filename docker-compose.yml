@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17 # Image officielle de Jenkins avec le JDK 17
+    container_name: jenkins-ensitech
+    privileged: true # Donne des permissions étendues
+    user: root # Pour éviter les problèmes de permissions au début
+    ports:
+      - "9090:8080" # On accède à Jenkins via localhost:9090
+      - "50000:50000"
+    volumes:
+      - jenkins_data:/var/jenkins_home # Stocke les données de Jenkins pour qu'elles persistent
+      - /var/run/docker.sock:/var/run/docker.sock # Permet à Jenkins de lancer des commandes Docker (avancé)
+
+volumes:
+  jenkins_data:

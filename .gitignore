@@ -1,0 +1,53 @@
+# Fichiers générés par les IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.classpath
+.project
+.settings/
+.vscode/
+
+# Fichiers générés par Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# Fichiers de logs
+*.log
+logs/
+
+# Fichiers de configuration locaux
+application-*.properties
+application-*.yml
+
+# Fichiers divers
+*.DS_Store
+*~
+*.swp
+
+# Fichiers de build de distributions
+/dist/
+/out/
+
+# Fichiers temporaires
+*.tmp
+
+# Fichiers d'archives
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# Cache et dépendances de Node (si vous avez un front-end)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+.env

@@ -1,0 +1,80 @@
+# ==========================================================
+# FICHIER DISTANT: config-repo/gateway-service.yml
+# ==========================================================
+# Contient la configuration métier de la passerelle.
+
+server:
+  port: 8888 # Le port du Gateway, notre point d'entrée unique
+
+spring:
+  cloud:
+    gateway:
+      # Activer l'intégration avec Eureka pour le routage dynamique
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      #Définition des règles de routage
+      routes:
+        #Route pour user-service
+        - id: user-service-route
+          uri: lb://user-service
+          predicates:
+            - Path=/api/teachers/**, /api/students/**, /api/studymanagers/**, /api/directors/**, /api/administrators/**
+
+        #Route pour course-service
+        - id: course-service-route
+          uri: lb://course-service
+          predicates:
+            - Path=/api/courses/**
+
+        # Route pour authentication-service
+        - id: authentication-service-route
+          # uri:  http://localhost:8083
+          uri: lb://authentication-service
+          predicates:
+            - Path=/api/auth/**
+
+        # Route pour training-service
+        - id: training-service-route
+          uri: lb://training-service
+          predicates:
+            - Path=/api/training/**
+
+        #Route pour registration-service
+        - id: registration-service-route
+          uri: lb://registration-service
+          predicates:
+            - Path=/api/registrations/**
+
+        #Route pour academic-service
+        - id: academic-service-route
+          uri: lb://academic-service
+          predicates:
+            - Path=/api/academic-year/**
+
+
+  
+      #Configuration CORS Globale
+
+      globalcors:
+        cors-configurations:
+          '[/**]': #S'applique à toutes les routes
+            #allowed-origins: "http://localhost:4200"
+            allowed-origins: "*"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowed-headers: "*"
+            #allow-credentials: true
+            allow-credentials: false
+
+
+#La configuration Eureka est déjà dans le fichier commun 'application.properties',
+#donc pas besoin de la répéter ici, sauf si vous voulez la surcharger.
+#Ajout d'un commentaire pour forcer la mise à jour Git suite changement encodage en utf-8 pour le build par jenkins.
+

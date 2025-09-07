@@ -1,0 +1,38 @@
+#====================================================================
+#FICHIER LOCAL: gateway-service/src/main/resources/application.yml
+#====================================================================
+#Ce fichier contient LE STRICT MINIMUM pour démarrer et trouver le Config Server.
+
+spring:
+  application:
+    #Le nom de l'application est utilisé pour s'identifier auprès d'Eureka
+    #et pour que le Config Server trouve le fichier 'gateway-service.yml'.
+    name: gateway-service
+
+  #Indique à Spring où trouver le reste de sa configuration.
+  config:
+    import: "optional:configserver:http://localhost:9999"
+    #import: "optional:configserver:${CONFIG_SERVER_URI:http://localhost:9999}"
+
+  #Définit le profil actif pour charger les configurations spécifiques à l'environnement.
+  profiles:
+    active: dev
+
+
+
+ #ici sera la clé secrete
+
+jwt:
+  secret-key: ${JWT_SECRET_KEY}
+  expiration: 86400000
+    #logging:
+  #level:
+    #org.springframework.cloud.gateway: DEBUG
+    #org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: DEBUG
+
+    #Ajout d'un commentaire pour forcer la mise à jour Git suite changement encodage en utf-8 pour le build par jenkins.
+
+#logging:
+  #level:
+    #org.springframework.cloud.gateway: DEBUG
+    #reactor.netty: DEBUG
