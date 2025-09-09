@@ -19,7 +19,7 @@ pipeline {
         AWS_DEFAULT_REGION = 'us-east-1' //  AWS region
         IMAGE_REPO = 'ensitech-microservice' //  ECR repo name
         AWS_ACCOUNT_ID = '275057777886' //  AWS account ID
-        ECS_CLUSTER = 'ensitech-cluster' // cluster ECS
+        ECS_CLUSTER = 'ensitech-cluster1' // cluster ECS
         ECS_SERVICE = 'ensitech-service'// service ECS
         TASK_FAMILY = 'ensitech-task' //  task definition ECS
     }
@@ -56,9 +56,10 @@ pipeline {
             steps {
                 script {
                     // On peut utiliser un tag basé sur le commit pour plus de traçabilité
-                    def IMAGE_TAG = "${env.BUILD_NUMBER}"
+                    // def IMAGE_TAG = "${env.BUILD_NUMBER}"
+                    def IMAGE_TAG = "authentication-service"
                     env.IMAGE_TAG = IMAGE_TAG
-                    sh "docker build -t $IMAGE_REPO:$IMAGE_TAG ."
+                    sh "docker build -t $IMAGE_REPO:$IMAGE_TAG ./authentication-service"
                     echo "Docker image built: $IMAGE_REPO:$IMAGE_TAG"
                 }
             }
@@ -113,17 +114,17 @@ pipeline {
         always {
                 // ON A SIMPLEMENT SUPPRIMÉ LE BLOC JacocoPublisher
                 // C'est l'étape fournie par le plugin "Coverage"
-                // recordCoverage(tools: [[parser: 'JACOCO', pattern: '**/target/site/jacoco/jacoco.xml']])
-                // echo 'Rapport de couverture de code publié.'
+                recordCoverage(tools: [[parser: 'JACOCO', pattern: '**/target/site/jacoco/jacoco.xml']])
+                echo 'Rapport de couverture de code publié.'
 
                 // Nettoie l'espace de travail pour le prochain build.
-                // cleanWs()
-                // echo 'Espace de travail nettoyé.'
+                cleanWs()
+                echo 'Espace de travail nettoyé.'
 
-                coverage adapters: [jacocoAdapter('**/target/site/jacoco/jacoco.xml')],
-                                 sourceFileResolver: sourceFiles('**/src/main/java')
-                        cleanWs()
-                        echo 'Rapport de couverture publié avec succès.'
+               // coverage adapters: [jacocoAdapter('**/target/site/jacoco/jacoco.xml')],
+                                // sourceFileResolver: sourceFiles('**/src/main/java')
+                        //cleanWs()
+                       // echo 'Rapport de couverture publié avec succès.'
             }
     }
 }
