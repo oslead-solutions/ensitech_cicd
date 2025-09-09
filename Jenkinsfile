@@ -15,6 +15,11 @@ pipeline {
             jdk 'jdk21'
     }
 
+  environment {
+        AWS_DEFAULT_REGION = 'us-east-1' //  AWS region
+        IMAGE_REPO = 'ensitech-microservice' //  ECR repo name
+        AWS_ACCOUNT_ID = '275057777886' //  AWS account ID
+    }
     // 2. Stages : Les grandes étapes de notre processus.
     stages {
         // --- Étape 1 : Checkout ---
@@ -42,6 +47,32 @@ pipeline {
                 echo 'Build, tests et génération du rapport de couverture terminés.'
             }
         }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh """
+                    docker build -t $IMAGE_REPO:latest .
+                    """
+                }
+            }
+        }
+
+         stage('Login & Push to ECR') {
+            steps {
+                withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
+                    script {
+                        sh """
+                        aws ecr get-login-password --region $AWS_DEFAULT_REGION \
+                          | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+                        docker tag $IMAGE_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:latest
+                        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:latest
+                        """
+                    }
+                }
+            }
+         }
     }
 
     // 3. Post : Actions à faire à la fin du pipeline.
