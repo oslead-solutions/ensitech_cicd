@@ -19,6 +19,9 @@ pipeline {
         AWS_DEFAULT_REGION = 'us-east-1' //  AWS region
         IMAGE_REPO = 'ensitech-microservice' //  ECR repo name
         AWS_ACCOUNT_ID = '275057777886' //  AWS account ID
+        ECS_CLUSTER = 'ensitech-cluster' // cluster ECS
+        ECS_SERVICE = 'ensitech-service'// service ECS
+        TASK_FAMILY = 'ensitech-task' //  task definition ECS
     }
     // 2. Stages : Les grandes étapes de notre processus.
     stages {
@@ -43,6 +46,7 @@ pipeline {
                 // La phase 'verify' exécute le cycle de vie jusqu'aux tests d'intégration
                 // et déclenche la génération du rapport JaCoCo.
                 // 'bat' est pour Windows. Sur Mac/Linux, on utiliserait 'sh' pour le conteneur Docker.
+                sh 'chmod +x mvnw'
                 sh './mvnw clean install'
                 echo 'Build, tests et génération du rapport de couverture terminés.'
             }
@@ -51,14 +55,16 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh """
-                    docker build -t $IMAGE_REPO:latest .
-                    """
+                    // On peut utiliser un tag basé sur le commit pour plus de traçabilité
+                    def IMAGE_TAG = "${env.BUILD_NUMBER}"
+                    env.IMAGE_TAG = IMAGE_TAG
+                    sh "docker build -t $IMAGE_REPO:$IMAGE_TAG ."
+                    echo "Docker image built: $IMAGE_REPO:$IMAGE_TAG"
                 }
             }
         }
 
-         stage('Login & Push to ECR') {
+        stage('Login & Push to ECR') {
             steps {
                 withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
                     script {
@@ -66,13 +72,39 @@ pipeline {
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION \
                           | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
-                        docker tag $IMAGE_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:latest
-                        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:latest
+                        docker tag $IMAGE_REPO:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:$IMAGE_TAG
+                        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:$IMAGE_TAG
                         """
                     }
                 }
             }
-         }
+        }
+
+
+        stage('Deploy to ECS') {
+            steps {
+                withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
+                    script {
+                        // Récupère la définition de tâche existante et remplace l'image
+                        sh """
+                        # Récupère la task definition actuelle
+                        TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition $TASK_FAMILY)
+
+                        # Met à jour l'image du container
+                        NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq --arg IMAGE "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:$IMAGE_TAG" '.taskDefinition.containerDefinitions[0].image=$IMAGE | {family: .taskDefinition.family, networkMode: .taskDefinition.networkMode, containerDefinitions: .taskDefinition.containerDefinitions, requiresCompatibilities: .taskDefinition.requiresCompatibilities, cpu: .taskDefinition.cpu, memory: .taskDefinition.memory}')
+
+                        # Enregistre une nouvelle révision de task definition
+                        NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
+
+                        # Met à jour le service ECS avec la nouvelle révision
+                        aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition \$NEW_TASK_DEF_ARN
+                        """
+                        echo "Déploiement ECS avec image tag: $IMAGE_TAG"
+                    }
+                }
+            }
+        }
+
     }
 
     // 3. Post : Actions à faire à la fin du pipeline.
@@ -81,12 +113,17 @@ pipeline {
         always {
                 // ON A SIMPLEMENT SUPPRIMÉ LE BLOC JacocoPublisher
                 // C'est l'étape fournie par le plugin "Coverage"
-                recordCoverage(tools: [[parser: 'JACOCO', pattern: '**/target/site/jacoco/jacoco.xml']])
-                echo 'Rapport de couverture de code publié.'
+                // recordCoverage(tools: [[parser: 'JACOCO', pattern: '**/target/site/jacoco/jacoco.xml']])
+                // echo 'Rapport de couverture de code publié.'
 
                 // Nettoie l'espace de travail pour le prochain build.
-                cleanWs()
-                echo 'Espace de travail nettoyé.'
+                // cleanWs()
+                // echo 'Espace de travail nettoyé.'
+
+                coverage adapters: [jacocoAdapter('**/target/site/jacoco/jacoco.xml')],
+                                 sourceFileResolver: sourceFiles('**/src/main/java')
+                        cleanWs()
+                        echo 'Rapport de couverture publié avec succès.'
             }
     }
 }
