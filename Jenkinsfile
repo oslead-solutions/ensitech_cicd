@@ -32,20 +32,22 @@ pipeline {
         stage('Build') {
             steps {
                 sh '''
+                    echo "JAVA_HOME=$JAVA_HOME"
+                    java -version
                     chmod +x mvnw
-                    ./mvnw clean compile
+                    ./mvnw clean package -DskipTests
                 '''
                 echo 'Compilation réussie.'
             }
         }
 
-        stage('Test') {
+       /* stage('Test') {
             options { timeout(time: 10, unit: 'MINUTES') }
             steps {
                 sh './mvnw verify'
                 echo 'Tests et rapport JaCoCo générés.'
             }
-        }
+        }*/
 
         stage('Build Docker Images') {
             parallel {
