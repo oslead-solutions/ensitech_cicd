@@ -1,66 +1,73 @@
-// Ce fichier est la "recette" que Jenkins va suivre.
-// Il est écrit en Groovy, un langage simple et scripté.
-
 pipeline {
-    // 1. Agent : Où doit s'exécuter ce pipeline ?
-    // 'any' signifie que Jenkins peut utiliser n'importe quel agent disponible.
     agent any
 
-        // NOUVELLE SECTION : Outils (Tools)
-        // C'est ici qu'on déclare les outils dont notre build a besoin.
     tools {
-            // On demande à Jenkins d'utiliser un JDK.
-            // Le nom 'jdk21' doit correspondre à une configuration dans Jenkins.
-            // Nous allons configurer cela dans l'interface web.
-            jdk 'jdk21'
+        jdk 'jdk21'
     }
 
-  environment {
-        AWS_DEFAULT_REGION = 'us-east-1' //  AWS region
-        IMAGE_REPO = 'ensitech-microservice' //  ECR repo name
-        AWS_ACCOUNT_ID = '275057777886' //  AWS account ID
-        ECS_CLUSTER = 'ensitech-cluster1' // cluster ECS
-        ECS_SERVICE = 'ensitech-service'// service ECS
-        TASK_FAMILY = 'ensitech-task' //  task definition ECS
+    environment {
+        AWS_DEFAULT_REGION       = 'us-east-1'
+        AWS_ACCOUNT_ID           = '275057777886'
+        IMAGE_REPO               = 'ensitech-microservice'
+        IMAGE_TAG                = "${env.BUILD_NUMBER}"
+        ECS_CLUSTER              = 'ensitech-cluster1'
+        ECS_SERVICE              = 'ensitech-service'
+        TASK_FAMILY              = 'ensitech-task'
+        JAVA_HOME                = '/opt/java/jdk-21.0.8'
+
+        // Microservices
+        MICROSERVICE_DISCOVERY      = 'discovery-service'
+        MICROSERVICE_AUTHENTICATION = 'authentication-service'
     }
-    // 2. Stages : Les grandes étapes de notre processus.
+
     stages {
-        // --- Étape 1 : Checkout ---
+
         stage('Checkout SCM') {
             steps {
-                // Récupère le code depuis le dépôt Git configuré.
                 checkout scm
                 echo 'Code récupéré avec succès.'
             }
         }
 
-        // --- Étape 2 : Build & Test ---
-        stage('Build & Test with Maven') {
-          options {
-                        // On donne 10 minutes à ce stage pour se terminer.
-                        // Choisissez une valeur raisonnable pour votre projet.
-                        timeout(time: 18, unit: 'MINUTES')
-                    }
+        stage('Build') {
             steps {
-                // Exécute la commande Maven pour compiler et lancer les tests.
-                // La phase 'verify' exécute le cycle de vie jusqu'aux tests d'intégration
-                // et déclenche la génération du rapport JaCoCo.
-                // 'bat' est pour Windows. Sur Mac/Linux, on utiliserait 'sh' pour le conteneur Docker.
-                sh 'chmod +x mvnw'
-                sh './mvnw clean install'
-                echo 'Build, tests et génération du rapport de couverture terminés.'
+                sh '''
+                    chmod +x mvnw
+                    ./mvnw clean compile
+                '''
+                echo 'Compilation réussie.'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Test') {
+            options { timeout(time: 10, unit: 'MINUTES') }
             steps {
-                script {
-                    // On peut utiliser un tag basé sur le commit pour plus de traçabilité
-                    // def IMAGE_TAG = "${env.BUILD_NUMBER}"
-                    def IMAGE_TAG = "authentication-service"
-                    env.IMAGE_TAG = IMAGE_TAG
-                    sh "docker build -t $IMAGE_REPO:$IMAGE_TAG ./authentication-service"
-                    echo "Docker image built: $IMAGE_REPO:$IMAGE_TAG"
+                sh './mvnw verify'
+                echo 'Tests et rapport JaCoCo générés.'
+            }
+        }
+
+        stage('Build Docker Images') {
+            parallel {
+                stage('Discovery Service') {
+                    steps {
+                        script {
+                            sh """
+                            docker build -t $IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG ./$MICROSERVICE_DISCOVERY
+                            """
+                            echo "Image Discovery buildée: $IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG"
+                        }
+                    }
+                }
+                stage('Authentication Service') {
+                    steps {
+                        script {
+                            sh """
+                            docker build -t $IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG ./$MICROSERVICE_AUTHENTICATION
+                            """
+                            echo "Image Authentication buildée: $IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG"
+                        }
+                    }
                 }
             }
         }
@@ -73,58 +80,70 @@ pipeline {
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION \
                           | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
-                        docker tag $IMAGE_REPO:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:$IMAGE_TAG
-                        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:$IMAGE_TAG
+                        # Push Discovery
+                        docker tag $IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG
+                        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG
+
+                        # Push Authentication
+                        docker tag $IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG
+                        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG
                         """
                     }
                 }
             }
         }
 
+         stage('Deploy to ECS') {
+             steps {
+                 withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
+                     script {
+                         sh """
+                         # Récupération de la définition actuelle de la tâche ECS
+                         TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition $TASK_FAMILY)
 
-        stage('Deploy to ECS') {
-            steps {
-                withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
-                    script {
-                        // Récupère la définition de tâche existante et remplace l'image
-                        sh """
-                        # Récupère la task definition actuelle
-                        TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition $TASK_FAMILY)
+                         # Mise à jour des images pour chaque container de la task definition
+                         NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq \\
+                             --arg DISCOVERY_IMAGE "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG" \\
+                             --arg AUTH_IMAGE "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG" \\
+                             '
+                             .taskDefinition
+                             | .containerDefinitions |=
+                                 (map(
+                                     if .name == "$MICROSERVICE_DISCOVERY" then
+                                         .image = $DISCOVERY_IMAGE
+                                     elif .name == "$MICROSERVICE_AUTHENTICATION" then
+                                         .image = $AUTH_IMAGE
+                                     else .
+                                     end
+                                 ))
+                             | {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory}
+                             ')
 
-                        # Met à jour l'image du container
-                        NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq --arg IMAGE "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO:$IMAGE_TAG" '.taskDefinition.containerDefinitions[0].image=$IMAGE | {family: .taskDefinition.family, networkMode: .taskDefinition.networkMode, containerDefinitions: .taskDefinition.containerDefinitions, requiresCompatibilities: .taskDefinition.requiresCompatibilities, cpu: .taskDefinition.cpu, memory: .taskDefinition.memory}')
+                         # Enregistrement d'une nouvelle révision de la task definition
+                         NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
 
-                        # Enregistre une nouvelle révision de task definition
-                        NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
+                         # Mise à jour du service ECS avec la nouvelle révision
+                         aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition \$NEW_TASK_DEF_ARN
+                         """
 
-                        # Met à jour le service ECS avec la nouvelle révision
-                        aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition \$NEW_TASK_DEF_ARN
-                        """
-                        echo "Déploiement ECS avec image tag: $IMAGE_TAG"
-                    }
-                }
-            }
-        }
+                         echo "Déploiement ECS terminé avec Discovery: $IMAGE_TAG et Authentication: $IMAGE_TAG"
+                     }
+                 }
+             }
+         }
 
     }
 
-    // 3. Post : Actions à faire à la fin du pipeline.
     post {
-        // 'always' s'exécute toujours, que le build réussisse ou échoue.
         always {
-                // ON A SIMPLEMENT SUPPRIMÉ LE BLOC JacocoPublisher
-                // C'est l'étape fournie par le plugin "Coverage"
-                recordCoverage(tools: [[parser: 'JACOCO', pattern: '**/target/site/jacoco/jacoco.xml']])
-                echo 'Rapport de couverture de code publié.'
+            recordCoverage(tools: [[parser: 'JACOCO', pattern: '**/target/site/jacoco/jacoco.xml']])
+            echo 'Rapport de couverture publié.'
 
-                // Nettoie l'espace de travail pour le prochain build.
-                cleanWs()
-                echo 'Espace de travail nettoyé.'
+            archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+            echo 'Artefacts archivés.'
 
-               // coverage adapters: [jacocoAdapter('**/target/site/jacoco/jacoco.xml')],
-                                // sourceFileResolver: sourceFiles('**/src/main/java')
-                        //cleanWs()
-                       // echo 'Rapport de couverture publié avec succès.'
-            }
+            cleanWs()
+            echo 'Espace de travail nettoyé.'
+        }
     }
 }
