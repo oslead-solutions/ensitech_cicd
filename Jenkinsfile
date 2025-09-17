@@ -1,9 +1,9 @@
 pipeline {
     agent any
 
-    tools {
-        //jdk 'jdk21'
-    }
+    /*tools {
+        jdk 'jdk21'
+    }*/
 
     environment {
         AWS_DEFAULT_REGION       = 'us-east-1'
