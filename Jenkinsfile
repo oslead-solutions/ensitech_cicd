@@ -35,7 +35,7 @@ pipeline {
                     echo "JAVA_HOME=$JAVA_HOME"
                     java -version
                     chmod +x mvnw
-                    mvn clean package -DskipTests
+                    ./mvnw clean package -DskipTests
                 '''
                 echo 'Création des fichier JAR  réussie.'
             }
