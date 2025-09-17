@@ -82,13 +82,18 @@ pipeline {
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION \
                           | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
+                         echo "ECR Login success"
                         # Push Discovery
                         docker tag $IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG
                         docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG
 
+                         echo "ECR push Discovery"
+
                         # Push Authentication
                         docker tag $IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG
                         docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG
+
+                        echo "ECR push Authentication"
                         """
                     }
                 }

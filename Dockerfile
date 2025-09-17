@@ -31,6 +31,7 @@ RUN jenkins-plugin-cli --plugins \
     pipeline-utility-steps \
     ws-cleanup \
     aws-steps \
-    git
+    git \
+    code-coverage-api
 
 USER jenkins
