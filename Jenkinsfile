@@ -1,15 +1,10 @@
 pipeline {
     agent any
 
-    /*tools {
-        jdk 'jdk21'
-    }*/
-
     environment {
         AWS_DEFAULT_REGION       = 'us-east-1'
         AWS_ACCOUNT_ID           = '275057777886'
         IMAGE_REPO               = 'ensitech-microservice'
-        IMAGE_TAG                = "${env.BUILD_NUMBER}"
         ECS_CLUSTER              = 'ensitech-cluster1'
         ECS_SERVICE              = 'ensitech-service'
         TASK_FAMILY              = 'ensitech-task'
@@ -37,107 +32,89 @@ pipeline {
                     chmod +x mvnw
                     ./mvnw clean package -DskipTests
                 '''
-                echo 'Création des fichier JAR  réussie.'
+                echo 'Création des fichiers JAR réussie.'
             }
         }
 
-       /* stage('Test') {
-            options { timeout(time: 10, unit: 'MINUTES') }
+        stage('Prepare Image URLs') {
             steps {
-                sh './mvnw verify'
-                echo 'Tests et rapport JaCoCo générés.'
+                script {
+                    // On utilise BUILD_NUMBER pour le tag
+                    env.IMAGE_TAG = "${BUILD_NUMBER}"
+                    env.DISCOVERY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_DISCOVERY}:${IMAGE_TAG}"
+                    env.AUTH_IMAGE      = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_AUTHENTICATION}:${IMAGE_TAG}"
+
+                    echo "Discovery Image: ${env.DISCOVERY_IMAGE}"
+                    echo "Authentication Image: ${env.AUTH_IMAGE}"
+                }
             }
-        }*/
+        }
 
         stage('Build Docker Images') {
             parallel {
                 stage('Discovery Service') {
                     steps {
-                        script {
-                            sh """
-                            docker build -t $IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG ./$MICROSERVICE_DISCOVERY
-                            """
-                            echo "Image Discovery buildée: $IMAGE_REPO/$MICROSERVICE_DISCOVERY:$IMAGE_TAG"
-                        }
+                        sh "docker build -t ${env.DISCOVERY_IMAGE} ./${MICROSERVICE_DISCOVERY}"
+                        echo "Image Discovery buildée: ${env.DISCOVERY_IMAGE}"
                     }
                 }
                 stage('Authentication Service') {
                     steps {
-                        script {
-                            sh """
-                            docker build -t $IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG ./$MICROSERVICE_AUTHENTICATION
-                            """
-                            echo "Image Authentication buildée: $IMAGE_REPO/$MICROSERVICE_AUTHENTICATION:$IMAGE_TAG"
-                        }
+                        sh "docker build -t ${env.AUTH_IMAGE} ./${MICROSERVICE_AUTHENTICATION}"
+                        echo "Image Authentication buildée: ${env.AUTH_IMAGE}"
                     }
                 }
             }
         }
 
-     stage('Login & Push to ECR') {
-                steps {
+        stage('Login & Push to ECR') {
+            steps {
+                withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
+                    sh """
+                    aws ecr get-login-password --region ${AWS_DEFAULT_REGION} \
+                        | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+
+                    docker push ${env.DISCOVERY_IMAGE}
+                    docker push ${env.AUTH_IMAGE}
+                    """
+                    echo "Images poussées vers ECR"
+                }
+            }
+        }
+
+        stage('Deploy to ECS') {
+            steps {
+                withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
                     script {
-                        // Define image URLs
-                        def discoveryImageUrl = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_DISCOVERY}:${IMAGE_TAG}"
-                        def authImageUrl      = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_AUTHENTICATION}:${IMAGE_TAG}"
-
                         sh """
-                            # Login to ECR
+                        TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition ${TASK_FAMILY})
 
-                            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} \
-                                | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+                        NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq \\
+                            --arg DISCOVERY_IMAGE "${env.DISCOVERY_IMAGE}" \\
+                            --arg AUTH_IMAGE "${env.AUTH_IMAGE}" \\
+                            '
+                            .taskDefinition
+                            | .containerDefinitions |=
+                                (map(
+                                    if .name == "${MICROSERVICE_DISCOVERY}" then
+                                        .image = $DISCOVERY_IMAGE
+                                    elif .name == "${MICROSERVICE_AUTHENTICATION}" then
+                                        .image = $AUTH_IMAGE
+                                    else .
+                                    end
+                                ))
+                            | {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory}
+                            ')
 
+                        NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
 
-                            # Push Discovery
-                            docker tag ${IMAGE_REPO}/${MICROSERVICE_DISCOVERY}:${IMAGE_TAG} ${discoveryImageUrl}
-                            docker push ${discoveryImageUrl}
-
-                            # Push Authentication
-                            docker tag ${IMAGE_REPO}/${MICROSERVICE_AUTHENTICATION}:${IMAGE_TAG} ${authImageUrl}
-                            docker push ${authImageUrl}
+                        aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
                         """
+                        echo "Déploiement ECS terminé avec Discovery: ${env.IMAGE_TAG} et Authentication: ${env.IMAGE_TAG}"
                     }
                 }
             }
-
-            stage('Deploy to ECS') {
-                steps {
-                    script {
-                        def discoveryImageUrl = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_DISCOVERY}:${IMAGE_TAG}"
-                        def authImageUrl      = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_AUTHENTICATION}:${IMAGE_TAG}"
-
-                        sh """
-                            # Get current task definition
-                            TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition ${TASK_FAMILY})
-
-                            # Update container images
-                            NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq \\
-                                --arg DISCOVERY_IMAGE "${discoveryImageUrl}" \\
-                                --arg AUTH_IMAGE "${authImageUrl}" \\
-                                '
-                                .taskDefinition
-                                | .containerDefinitions |=
-                                    (map(
-                                        if .name == "${MICROSERVICE_DISCOVERY}" then
-                                            .image = \$DISCOVERY_IMAGE
-                                        elif .name == "${MICROSERVICE_AUTHENTICATION}" then
-                                            .image = \$AUTH_IMAGE
-                                        else .
-                                        end
-                                    ))
-                                | {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory}
-                                ')
-
-                            # Register new task definition
-                            NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
-
-                            # Update ECS service
-                            aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
-                        """
-                        echo "Déploiement ECS terminé avec Discovery: ${IMAGE_TAG} et Authentication: ${IMAGE_TAG}"
-                    }
-                }
-            }
+        }
     }
 
     post {
