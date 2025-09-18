@@ -87,48 +87,53 @@ pipeline {
             }
         }
 
-     stage('Deploy to ECS') {
-         steps {
-             withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
-                 script {
-                     sh """
-                     # Récupérer la task definition actuelle
-                     TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition ${TASK_FAMILY})
+    stage('Deploy to ECS') {
+        steps {
+            withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
+                script {
+                    sh """
+                    # Récupérer la task definition actuelle
+                    TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition ${TASK_FAMILY})
 
-                     # Construire la nouvelle task definition avec les nouvelles images et executionRoleArn
-                     NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq --arg DISCOVERY_IMAGE "${env.DISCOVERY_IMAGE}" --arg AUTH_IMAGE "${env.AUTH_IMAGE}" '
-                         .taskDefinition
-                         | .containerDefinitions |= map(
-                             if .name == "discovery-service" then
-                                 .image = \$DISCOVERY_IMAGE
-                             elif .name == "authentication-service" then
-                                 .image = \$AUTH_IMAGE
-                             else .
-                             end
-                         )
-                         | {
-                             family,
-                             networkMode,
-                             containerDefinitions,
-                             requiresCompatibilities,
-                             cpu,
-                             memory,
-                             executionRoleArn: .executionRoleArn
-                         }
-                     ')
+                    # Construire la nouvelle task definition avec les nouvelles images et executionRoleArn
+                    NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq \\
+                        --arg DISCOVERY_IMAGE "${env.DISCOVERY_IMAGE}" \\
+                        --arg AUTH_IMAGE "${env.AUTH_IMAGE}" \\
+                        '
+                        .taskDefinition
+                        | .containerDefinitions |= map(
+                            if .name == "ensitech-container-discovery" then
+                                .image = \$DISCOVERY_IMAGE
+                            elif .name == "ensitech-container-authentication" then
+                                .image = \$AUTH_IMAGE
+                            else .
+                            end
+                        )
+                        | {
+                            family,
+                            networkMode,
+                            containerDefinitions,
+                            requiresCompatibilities,
+                            cpu,
+                            memory,
+                            executionRoleArn: .executionRoleArn
+                        }
+                        '
+                    )
 
-                     # Enregistrer une nouvelle révision de la task definition
-                     NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
+                    # Enregistrer une nouvelle révision de la task definition
+                    NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
 
-                     # Mettre à jour le service ECS
-                     aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
-                     """
+                    # Mettre à jour le service ECS
+                    aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
+                    """
 
-                     echo "Déploiement ECS terminé avec Discovery: ${env.DISCOVERY_IMAGE} et Authentication: ${env.AUTH_IMAGE}"
-                 }
-             }
-         }
-     }
+                    echo "Déploiement ECS terminé avec Discovery: ${env.DISCOVERY_IMAGE} et Authentication: ${env.AUTH_IMAGE}"
+                }
+            }
+        }
+    }
+
 
 
 
