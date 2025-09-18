@@ -41,8 +41,13 @@ pipeline {
                 script {
                     // On utilise BUILD_NUMBER pour le tag
                     env.IMAGE_TAG = "${BUILD_NUMBER}"
-                    env.DISCOVERY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_DISCOVERY}:${IMAGE_TAG}"
-                    env.AUTH_IMAGE      = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_AUTHENTICATION}:${IMAGE_TAG}"
+                    //env.DISCOVERY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_DISCOVERY}:${IMAGE_TAG}"
+                    //env.AUTH_IMAGE      = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_AUTHENTICATION}:${IMAGE_TAG}"
+                    // Nom de l'image pour Discovery
+                    env.DISCOVERY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:discovery-${IMAGE_TAG}"
+
+                    // Nom de l'image pour Authentication
+                    env.AUTH_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:auth-${IMAGE_TAG}"
 
                     echo "Discovery Image: ${env.DISCOVERY_IMAGE}"
                     echo "Authentication Image: ${env.AUTH_IMAGE}"
