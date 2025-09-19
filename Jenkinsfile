@@ -12,7 +12,13 @@ pipeline {
 
         // Microservices
         MICROSERVICE_DISCOVERY      = 'discovery-service'
+        MICROSERVICE_CONFIG = 'config-service'
+        MICROSERVICE_ACADEMIC = 'academic-service'
         MICROSERVICE_AUTHENTICATION = 'authentication-service'
+        MICROSERVICE_REGISTRATION = 'registration-service'
+        MICROSERVICE_TRAINING = 'training-service'
+        MICROSERVICE_USER = 'user-service'
+        MICROSERVICE_GATEWAY = 'gateway-service'
     }
 
     stages {
@@ -41,16 +47,25 @@ pipeline {
                 script {
                     // On utilise BUILD_NUMBER pour le tag
                     env.IMAGE_TAG = "${BUILD_NUMBER}"
-                    //env.DISCOVERY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_DISCOVERY}:${IMAGE_TAG}"
-                    //env.AUTH_IMAGE      = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}/${MICROSERVICE_AUTHENTICATION}:${IMAGE_TAG}"
-                    // Nom de l'image pour Discovery
-                    env.DISCOVERY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:discovery-${IMAGE_TAG}"
 
-                    // Nom de l'image pour Authentication
+                    // Nom de l'image pour chaque service
+                    env.DISCOVERY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:discovery-${IMAGE_TAG}"
+                    env.CONFIG_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:config-${IMAGE_TAG}"
+                    env.ACADEMIC_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:academic-${IMAGE_TAG}"
                     env.AUTH_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:auth-${IMAGE_TAG}"
+                    env.REGISTRATION_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:registration-${IMAGE_TAG}"
+                    env.TRAINING_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:training-${IMAGE_TAG}"
+                    env.USER_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:user-${IMAGE_TAG}"
+                    env.GATEWAY_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO}:gateway-${IMAGE_TAG}"
 
                     echo "Discovery Image: ${env.DISCOVERY_IMAGE}"
+                    echo "CONFIG Image: ${env.CONFIG_IMAGE}"
+                    echo "ACADEMIC Image: ${env.ACADEMIC_IMAGE}"
                     echo "Authentication Image: ${env.AUTH_IMAGE}"
+                    echo "REGISTRATION Image: ${env.REGISTRATION_IMAGE}"
+                    echo "TRAINING Image: ${env.TRAINING_IMAGE}"
+                    echo "USER Image: ${env.USER_IMAGE}"
+                    echo "GATEWAY Image: ${env.GATEWAY_IMAGE}"
                 }
             }
         }
@@ -63,10 +78,46 @@ pipeline {
                         echo "Image Discovery buildée: ${env.DISCOVERY_IMAGE}"
                     }
                 }
+                stage('Config Service') {
+                    steps {
+                        sh "docker build -t ${env.CONFIG_IMAGE} ./${MICROSERVICE_CONFIG}"
+                        echo "Image CONFIG buildée: ${env.CONFIG_IMAGE}"
+                    }
+                }
+                 stage('ACADEMIC Service') {
+                                    steps {
+                                        sh "docker build -t ${env.ACADEMIC_IMAGE} ./${MICROSERVICE_ACADEMIC}"
+                                        echo "Image ACADEMIC buildée: ${env.ACADEMIC_IMAGE}"
+                                    }
+                                }
                 stage('Authentication Service') {
                     steps {
                         sh "docker build -t ${env.AUTH_IMAGE} ./${MICROSERVICE_AUTHENTICATION}"
                         echo "Image Authentication buildée: ${env.AUTH_IMAGE}"
+                    }
+                }
+                stage('REGISTRATION Service') {
+                    steps {
+                        sh "docker build -t ${env.REGISTRATION_IMAGE} ./${MICROSERVICE_REGISTRATION}"
+                        echo "Image REGISTRATION buildée: ${env.REGISTRATION_IMAGE}"
+                    }
+                }
+                stage('TRAINING Service') {
+                    steps {
+                        sh "docker build -t ${env.TRAINING_IMAGE} ./${MICROSERVICE_TRAINING}"
+                        echo "Image TRAINING buildée: ${env.TRAINING_IMAGE}"
+                    }
+                }
+                stage('USER Service') {
+                    steps {
+                        sh "docker build -t ${env.USER_IMAGE} ./${MICROSERVICE_USER}"
+                        echo "Image USER buildée: ${env.USER_IMAGE}"
+                    }
+                }
+                stage('GATEWAY Service') {
+                    steps {
+                        sh "docker build -t ${env.GATEWAY_IMAGE} ./${MICROSERVICE_GATEWAY}"
+                        echo "Image GATEWAY buildée: ${env.GATEWAY_IMAGE}"
                     }
                 }
             }
@@ -80,7 +131,13 @@ pipeline {
                         | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
 
                     docker push ${env.DISCOVERY_IMAGE}
+                    docker push ${env.CONFIG_IMAGE}
+                    docker push ${env.ACADEMIC_IMAGE}
                     docker push ${env.AUTH_IMAGE}
+                    docker push ${env.REGISTRATION_IMAGE}
+                    docker push ${env.TRAINING_IMAGE}
+                    docker push ${env.USER_IMAGE}
+                    docker push ${env.GATEWAY_IMAGE}
                     """
                     echo "Images poussées vers ECR"
                 }
@@ -98,14 +155,32 @@ pipeline {
                     # Construire la nouvelle task definition avec les nouvelles images et executionRoleArn
                     NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq \\
                         --arg DISCOVERY_IMAGE "${env.DISCOVERY_IMAGE}" \\
+                        --arg CONFIG_IMAGE "${env.CONFIG_IMAGE}" \\
+                        --arg ACADEMIC_IMAGE "${env.ACADEMIC_IMAGE}" \\
                         --arg AUTH_IMAGE "${env.AUTH_IMAGE}" \\
+                        --arg REGISTRATION_IMAGE "${env.REGISTRATION_IMAGE}" \\
+                        --arg TRAINING_IMAGE "${env.TRAINING_IMAGE}" \\
+                        --arg USER_IMAGE "${env.USER_IMAGE}" \\
+                        --arg GATEWAY_IMAGE "${env.GATEWAY_IMAGE}" \\
                         '
                         .taskDefinition
                         | .containerDefinitions |= map(
                             if .name == "ensitech-container-discovery" then
                                 .image = \$DISCOVERY_IMAGE
+                            elif .name == "ensitech-container-config" then
+                                .image = \$CONFIG_IMAGE
+                            elif .name == "ensitech-container-academic" then
+                                .image = \$ACADEMIC_IMAGE
                             elif .name == "ensitech-container-authentication" then
                                 .image = \$AUTH_IMAGE
+                            elif .name == "ensitech-container-registration" then
+                                 .image = \$REGISTRATION_IMAGE
+                            elif .name == "ensitech-container-training" then
+                                 .image = \$TRAINING_IMAGE
+                            elif .name == "ensitech-container-user" then
+                                 .image = \$USER_IMAGE
+                            elif .name == "ensitech-container-gateway" then
+                                 .image = \$GATEWAY_IMAGE
                             else .
                             end
                         )
@@ -128,7 +203,7 @@ pipeline {
                     aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
                     """
 
-                    echo "Déploiement ECS terminé avec Discovery: ${env.DISCOVERY_IMAGE} et Authentication: ${env.AUTH_IMAGE}"
+                    echo "Déploiement ECS terminé"
                 }
             }
         }
