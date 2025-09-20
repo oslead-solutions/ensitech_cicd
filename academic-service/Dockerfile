@@ -8,19 +8,25 @@ COPY mvnw .
 
 COPY .mvn .mvn
 
-COPY pom.xml .
+#COPY pom.xml .
 
-COPY src src
+#COPY src src
 
 # Skip running tests
-RUN ./mvnw package -DskipTests
+#RUN ./mvnw package -DskipTests
 
-FROM eclipse-temurin:21-jre-noble
+#FROM eclipse-temurin:21-jre-noble
 
+#WORKDIR /app
+
+#COPY --from=builder /app/target/academic-service-*.jar academic-service.jar
+
+#EXPOSE 8085
+
+FROM eclipse-temurin:21-jdk
 WORKDIR /app
-
-COPY --from=builder /app/target/academic-service-*.jar academic-service.jar
-
+COPY target/*.jar app.jar
 EXPOSE 8085
+ENTRYPOINT ["java", "-jar", "app.jar"]
 
 ENTRYPOINT ["java", "-jar","academic-service.jar"]
