@@ -36,7 +36,7 @@ public class AuthenticationServiceApplication {
 
 
 
-			System.out.println("Chargement des variables depuis .env ou System.getenv() terminé ✅");
+			System.out.println("Chargement des variables depuis .env ou System.getenv() terminé ");
 
 		} catch (Exception e) {
 			// fallback en cas de souci avec dotenv
