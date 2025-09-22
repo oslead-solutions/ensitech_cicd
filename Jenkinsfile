@@ -197,7 +197,7 @@ pipeline {
                              | .environment = ((.environment // []) + [
                                   { "name": "DB_URL", "value": \$DB_URL_TRAINING },
                                   { "name": "DB_USERNAME", "value": \$DB_USERNAME },
-                                  { "name": "DB_PASSWORD", "value": \$DB_PASSWORD },
+                                  { "name": "DB_PASSWORD", "value": \$DB_PASSWORD }
                               ])
                           elif .name == "ensitech-container-user" then .image = \$USER_IMAGE
                           elif .name == "ensitech-container-gateway" then
@@ -226,7 +226,7 @@ pipeline {
                   echo "Mise à jour du service ECS..."
                   aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
 
-                  echo "✅ Déploiement ECS terminé."
+                  echo "Déploiement ECS terminé."
                   """
               }
           }
