@@ -6,9 +6,9 @@ pipeline {
         AWS_ACCOUNT_ID           = '275057777886'
         IMAGE_REPO               = 'ensitech-microservice'
         ECS_CLUSTER              = 'ensitech-cluster1'
-        ECS_SERVICE              = 'ensitech-service'
-        TASK_FAMILY              = 'ensitech-task'
-        JAVA_HOME                = '/opt/java/jdk-21.0.8'
+        ECS_SERVICE              = 'ensitech-task-250921b-service-8hrv6uou '
+        TASK_FAMILY              = 'ensitech-task-250921b'
+        //JAVA_HOME                = '/opt/java/jdk-21.0.8'
 
         // Microservices
         MICROSERVICE_DISCOVERY      = 'discovery-service'
@@ -145,6 +145,13 @@ pipeline {
         }
 
     stage('Deploy to ECS') {
+        environment {
+                DB_URL_AUTH = credentials('DB_URL_AUTH')   // inject Jenkins secret as env var
+                DB_USERNAME = credentials('DB_USERNAME')
+                DB_PASSWORD = credentials('DB_PASSWORD')
+                JWT_SECRET_KEY = credentials('JWT_SECRET_KEY')
+
+            }
         steps {
             withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
                 script {
@@ -162,6 +169,11 @@ pipeline {
                         --arg TRAINING_IMAGE "${env.TRAINING_IMAGE}" \\
                         --arg USER_IMAGE "${env.USER_IMAGE}" \\
                         --arg GATEWAY_IMAGE "${env.GATEWAY_IMAGE}" \\
+                        --arg DB_URL "${DB_URL_AUTH}" \\
+                        --arg DB_USERNAME "${DB_USERNAME}" \\
+                        --arg DB_PASSWORD "${DB_PASSWORD}" \\
+                        --arg JWT_SECRET_KEY "${JWT_SECRET_KEY}" \\
+
                         '
                         .taskDefinition
                         | .containerDefinitions |= map(
@@ -173,6 +185,14 @@ pipeline {
                                 .image = \$ACADEMIC_IMAGE
                             elif .name == "ensitech-container-authentication" then
                                 .image = \$AUTH_IMAGE
+                                | .environment = (
+                                     (.environment // []) + [
+                                        { "name": "DB_URL", "value": $DB_URL },
+                                        { "name": "DB_USERNAME", "value": $DB_USERNAME },
+                                        { "name": "DB_PASSWORD", "value": $DB_PASSWORD },
+                                        { "name": "JWT_SECRET_KEY", "value": $JWT_SECRET_KEY }
+                                    ]
+                                )
                             elif .name == "ensitech-container-registration" then
                                  .image = \$REGISTRATION_IMAGE
                             elif .name == "ensitech-container-training" then
@@ -208,6 +228,8 @@ pipeline {
             }
         }
     }
+
+
 
 
 
