@@ -144,90 +144,88 @@ pipeline {
             }
         }
 
-    stage('Deploy to ECS') {
-        environment {
-                DB_URL_AUTH = credentials('DB_URL_AUTH')   // inject Jenkins secret as env var
-                DB_USERNAME = credentials('DB_USERNAME')
-                DB_PASSWORD = credentials('DB_PASSWORD')
-                JWT_SECRET_KEY = credentials('JWT_SECRET_KEY')
+   stage('Deploy to ECS') {
+       environment {
+           DB_URL_AUTH     = credentials('DB_URL_AUTH')   // inject Jenkins secret as env var
+           DB_USERNAME     = credentials('DB_USERNAME')
+           DB_PASSWORD     = credentials('DB_PASSWORD')
+           JWT_SECRET_KEY  = credentials('JWT_SECRET_KEY')
+       }
+       steps {
+           withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
+               script {
+                   sh """
+                   # Récupérer la task definition actuelle
+                   TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition ${TASK_FAMILY})
 
-            }
-        steps {
-            withAWS(credentials: 'aws-credentials', region: "${AWS_DEFAULT_REGION}") {
-                script {
-                    sh """
-                    # Récupérer la task definition actuelle
-                    TASK_DEF_JSON=\$(aws ecs describe-task-definition --task-definition ${TASK_FAMILY})
+                   # Construire la nouvelle task definition avec les nouvelles images et executionRoleArn
+                   NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq \\
+                       --arg DISCOVERY_IMAGE "${env.DISCOVERY_IMAGE}" \\
+                       --arg CONFIG_IMAGE "${env.CONFIG_IMAGE}" \\
+                       --arg ACADEMIC_IMAGE "${env.ACADEMIC_IMAGE}" \\
+                       --arg AUTH_IMAGE "${env.AUTH_IMAGE}" \\
+                       --arg REGISTRATION_IMAGE "${env.REGISTRATION_IMAGE}" \\
+                       --arg TRAINING_IMAGE "${env.TRAINING_IMAGE}" \\
+                       --arg USER_IMAGE "${env.USER_IMAGE}" \\
+                       --arg GATEWAY_IMAGE "${env.GATEWAY_IMAGE}" \\
+                       --arg DB_URL "\$DB_URL_AUTH" \\
+                       --arg DB_USERNAME "\$DB_USERNAME" \\
+                       --arg DB_PASSWORD "\$DB_PASSWORD" \\
+                       --arg JWT_SECRET_KEY "\$JWT_SECRET_KEY" \\
+                       '
+                       .taskDefinition
+                       | .containerDefinitions |= map(
+                           if .name == "ensitech-container-discovery" then
+                               .image = \$DISCOVERY_IMAGE
+                           elif .name == "ensitech-container-config" then
+                               .image = \$CONFIG_IMAGE
+                           elif .name == "ensitech-container-academic" then
+                               .image = \$ACADEMIC_IMAGE
+                           elif .name == "ensitech-container-authentication" then
+                               .image = \$AUTH_IMAGE
+                               | .environment = (
+                                   (.environment // []) + [
+                                       { "name": "DB_URL", "value": "\$DB_URL" },
+                                       { "name": "DB_USERNAME", "value": "\$DB_USERNAME" },
+                                       { "name": "DB_PASSWORD", "value": "\$DB_PASSWORD" },
+                                       { "name": "JWT_SECRET_KEY", "value": "\$JWT_SECRET_KEY" }
+                                   ]
+                               )
+                           elif .name == "ensitech-container-registration" then
+                                .image = \$REGISTRATION_IMAGE
+                           elif .name == "ensitech-container-training" then
+                                .image = \$TRAINING_IMAGE
+                           elif .name == "ensitech-container-user" then
+                                .image = \$USER_IMAGE
+                           elif .name == "ensitech-container-gateway" then
+                                .image = \$GATEWAY_IMAGE
+                           else .
+                           end
+                       )
+                       | {
+                           family,
+                           networkMode,
+                           containerDefinitions,
+                           requiresCompatibilities,
+                           cpu,
+                           memory,
+                           executionRoleArn: .executionRoleArn
+                       }
+                       '
+                   )
 
-                    # Construire la nouvelle task definition avec les nouvelles images et executionRoleArn
-                    NEW_TASK_DEF_JSON=\$(echo \$TASK_DEF_JSON | jq \\
-                        --arg DISCOVERY_IMAGE "${env.DISCOVERY_IMAGE}" \\
-                        --arg CONFIG_IMAGE "${env.CONFIG_IMAGE}" \\
-                        --arg ACADEMIC_IMAGE "${env.ACADEMIC_IMAGE}" \\
-                        --arg AUTH_IMAGE "${env.AUTH_IMAGE}" \\
-                        --arg REGISTRATION_IMAGE "${env.REGISTRATION_IMAGE}" \\
-                        --arg TRAINING_IMAGE "${env.TRAINING_IMAGE}" \\
-                        --arg USER_IMAGE "${env.USER_IMAGE}" \\
-                        --arg GATEWAY_IMAGE "${env.GATEWAY_IMAGE}" \\
-                        --arg DB_URL "${DB_URL_AUTH}" \\
-                        --arg DB_USERNAME "${DB_USERNAME}" \\
-                        --arg DB_PASSWORD "${DB_PASSWORD}" \\
-                        --arg JWT_SECRET_KEY "${JWT_SECRET_KEY}" \\
+                   # Enregistrer une nouvelle révision de la task definition
+                   NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
 
-                        '
-                        .taskDefinition
-                        | .containerDefinitions |= map(
-                            if .name == "ensitech-container-discovery" then
-                                .image = \$DISCOVERY_IMAGE
-                            elif .name == "ensitech-container-config" then
-                                .image = \$CONFIG_IMAGE
-                            elif .name == "ensitech-container-academic" then
-                                .image = \$ACADEMIC_IMAGE
-                            elif .name == "ensitech-container-authentication" then
-                                .image = \$AUTH_IMAGE
-                                | .environment = (
-                                     (.environment // []) + [
-                                        { "name": "DB_URL", "value": $DB_URL },
-                                        { "name": "DB_USERNAME", "value": $DB_USERNAME },
-                                        { "name": "DB_PASSWORD", "value": $DB_PASSWORD },
-                                        { "name": "JWT_SECRET_KEY", "value": $JWT_SECRET_KEY }
-                                    ]
-                                )
-                            elif .name == "ensitech-container-registration" then
-                                 .image = \$REGISTRATION_IMAGE
-                            elif .name == "ensitech-container-training" then
-                                 .image = \$TRAINING_IMAGE
-                            elif .name == "ensitech-container-user" then
-                                 .image = \$USER_IMAGE
-                            elif .name == "ensitech-container-gateway" then
-                                 .image = \$GATEWAY_IMAGE
-                            else .
-                            end
-                        )
-                        | {
-                            family,
-                            networkMode,
-                            containerDefinitions,
-                            requiresCompatibilities,
-                            cpu,
-                            memory,
-                            executionRoleArn: .executionRoleArn
-                        }
-                        '
-                    )
+                   # Mettre à jour le service ECS
+                   aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
+                   """
 
-                    # Enregistrer une nouvelle révision de la task definition
-                    NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition --cli-input-json "\$NEW_TASK_DEF_JSON" --query 'taskDefinition.taskDefinitionArn' --output text)
-
-                    # Mettre à jour le service ECS
-                    aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition \$NEW_TASK_DEF_ARN
-                    """
-
-                    echo "Déploiement ECS terminé"
-                }
-            }
-        }
-    }
+                   echo "Déploiement ECS terminé"
+               }
+           }
+       }
+   }
 
 
 
