@@ -25,6 +25,7 @@ pipeline {
 
         stage('Checkout SCM') {
             steps {
+                deleteDir() // nettoie le workspace
                 checkout scm
                 echo 'Code récupéré avec succès.'
             }
