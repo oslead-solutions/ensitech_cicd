@@ -1,6 +1,12 @@
 
 FROM eclipse-temurin:21-jdk
 WORKDIR /app
+# Installer netcat pour tester la disponibilité des autres services
+RUN apt-get update && apt-get install -y netcat-openbsd
 COPY target/*.jar app.jar
 EXPOSE 8081
-ENTRYPOINT ["java", "-jar", "app.jar"]
+#ENTRYPOINT ["java", "-jar", "app.jar"]
+# Attendre Discovery et Config avant de démarrer
+CMD sh -c "while ! nc -z ensitech-container-discovery 8761; do echo 'Waiting for Discovery...'; sleep 3; done && \
+           while ! nc -z ensitech-container-config 9999; do echo 'Waiting for Config...'; sleep 3; done && \
+           echo 'Starting User service...' && java -jar app.jar"

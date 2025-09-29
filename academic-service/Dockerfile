@@ -1,32 +1,12 @@
-#Stage 1 : Build
-FROM eclipse-temurin:21-jdk-noble As builder
-LABEL authors="Jovy Nedved"
-
-WORKDIR /app
-
-COPY mvnw .
-
-COPY .mvn .mvn
-
-#COPY pom.xml .
-
-#COPY src src
-
-# Skip running tests
-#RUN ./mvnw package -DskipTests
-
-#FROM eclipse-temurin:21-jre-noble
-
-#WORKDIR /app
-
-#COPY --from=builder /app/target/academic-service-*.jar academic-service.jar
-
-#EXPOSE 8085
-
 FROM eclipse-temurin:21-jdk
 WORKDIR /app
+# Installer netcat pour tester la disponibilité des autres services
+RUN apt-get update && apt-get install -y netcat-openbsd
 COPY target/*.jar app.jar
 EXPOSE 8085
-ENTRYPOINT ["java", "-jar", "app.jar"]
+#ENTRYPOINT ["java", "-jar", "app.jar"]
 
-ENTRYPOINT ["java", "-jar","academic-service.jar"]
+# Attendre Discovery et Config avant de démarrer
+CMD sh -c "while ! nc -z ensitech-container-discovery 8761; do echo 'Waiting for Discovery...'; sleep 3; done && \
+           while ! nc -z ensitech-container-config 9999; do echo 'Waiting for Config...'; sleep 3; done && \
+           echo 'Starting Academic service...' && java -jar app.jar"
