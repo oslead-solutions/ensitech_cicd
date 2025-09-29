@@ -9,23 +9,27 @@ EXPOSE 8888
 
 # Attendre tous les services avant de démarrer la gateway
 CMD sh -c "
-  wait_for_service() {
-    SERVICE_NAME=\$1
-    HOST=\$2
-    PORT=\$3
-    echo \"Waiting for \$SERVICE_NAME on \$HOST:\$PORT...\"
-    until nc -z \$HOST \$PORT; do echo \"...\$SERVICE_NAME not ready\"; sleep 3; done
-    echo \"\$SERVICE_NAME is UP\"
-  }
+  echo 'Waiting for Discovery...'; until nc -z ensitech-container-discovery 8761; do echo '...Discovery not ready'; sleep 3; done;
+  echo 'Discovery is UP';
 
-  wait_for_service 'Discovery' ensitech-container-discovery 8761
-  wait_for_service 'Config' ensitech-container-config 9999
-  wait_for_service 'Academic' ensitech-container-academic 8085
-  wait_for_service 'Authentication' ensitech-container-authentication 8083
-  wait_for_service 'Registration' ensitech-container-registration 8086
-  wait_for_service 'Training' ensitech-container-training 8084
-  wait_for_service 'User' ensitech-container-user 8081
+  echo 'Waiting for Config...'; until nc -z ensitech-container-config 9999; do echo '...Config not ready'; sleep 3; done;
+  echo 'Config is UP';
 
-  echo 'All services are UP! Starting Gateway...'
+  echo 'Waiting for Academic...'; until nc -z ensitech-container-academic 8085; do echo '...Academic not ready'; sleep 3; done;
+  echo 'Academic is UP';
+
+  echo 'Waiting for Authentication...'; until nc -z ensitech-container-authentication 8083; do echo '...Authentication not ready'; sleep 3; done;
+  echo 'Authentication is UP';
+
+  echo 'Waiting for Registration...'; until nc -z ensitech-container-registration 8086; do echo '...Registration not ready'; sleep 3; done;
+  echo 'Registration is UP';
+
+  echo 'Waiting for Training...'; until nc -z ensitech-container-training 8084; do echo '...Training not ready'; sleep 3; done;
+  echo 'Training is UP';
+
+  echo 'Waiting for User...'; until nc -z ensitech-container-user 8081; do echo '...User not ready'; sleep 3; done;
+  echo 'User is UP';
+
+  echo 'All services are UP! Starting Gateway...';
   exec java -jar app.jar
 "
