@@ -1,5 +1,5 @@
 
-FROM eclipse-temurin:21-jdk-alpine
+FROM eclipse-temurin:21-jdk
 WORKDIR /app
 # Installer netcat (nc) pour tester la disponibilité du Discovery Service
 RUN apt-get update && apt-get install -y netcat-openbsd

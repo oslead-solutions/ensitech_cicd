@@ -10,12 +10,12 @@ EXPOSE 8888
 # Attendre tous les services avant de démarrer la gateway
 CMD sh -c "
   wait_for_service() {
-    SERVICE_NAME=$1
-    HOST=$2
-    PORT=$3
-    echo \"Waiting for $SERVICE_NAME on $HOST:$PORT...\";
-    until nc -z $HOST $PORT; do echo \"... $SERVICE_NAME not ready\"; sleep 3; done;
-    echo \"$SERVICE_NAME is UP\";
+    SERVICE_NAME=\$1
+    HOST=\$2
+    PORT=\$3
+    echo \"Waiting for \$SERVICE_NAME on \$HOST:\$PORT...\"
+    until nc -z \$HOST \$PORT; do echo \"...\$SERVICE_NAME not ready\"; sleep 3; done
+    echo \"\$SERVICE_NAME is UP\"
   }
 
   wait_for_service 'Discovery' ensitech-container-discovery 8761
