@@ -8,5 +8,5 @@ EXPOSE 9999
 #ENTRYPOINT ["java", "-jar", "app.jar"]
 
 # Attendre que le Discovery Service réponde sur le port 8761 avant de démarrer
-CMD sh -c "while ! nc -z ensitech-container-discovery 8761; do echo 'Waiting for Discovery...'; sleep 3; done && \
+CMD sh -c "while ! nc -z localhost 8761; do echo 'Waiting for Discovery...'; sleep 3; done && \
            echo 'Starting Config service...' && java -jar app.jar"

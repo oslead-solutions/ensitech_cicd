@@ -7,6 +7,6 @@ EXPOSE 8085
 #ENTRYPOINT ["java", "-jar", "app.jar"]
 
 # Attendre Discovery et Config avant de démarrer
-CMD sh -c "while ! nc -z ensitech-container-discovery 8761; do echo 'Waiting for Discovery...'; sleep 3; done && \
-           while ! nc -z ensitech-container-config 9999; do echo 'Waiting for Config...'; sleep 3; done && \
+CMD sh -c "while ! nc -z localhost 8761; do echo 'Waiting for Discovery...'; sleep 3; done && \
+           while ! nc -z localhost 9999; do echo 'Waiting for Config...'; sleep 3; done && \
            echo 'Starting Academic service...' && java -jar app.jar"
